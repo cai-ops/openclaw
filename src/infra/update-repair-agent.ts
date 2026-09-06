@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createAgentCleanupScope } from "../agents/run-cleanup-timeout.js";
 import { renderTriagePrompt } from "../commands/triage-prompt.js";
 import { redactSupportString } from "../logging/diagnostic-support-redaction.js";
 import { truncateUtf8Prefix, truncateUtf8Suffix } from "../utils/utf8-truncate.js";
@@ -142,6 +143,7 @@ export async function runUpdateRepairLoop(params: UpdateRepairParams): Promise<U
       throw new Error("Repair no longer owns the update attempt.");
     }
   };
+  const cleanup = createAgentCleanupScope();
   repairActive = true;
   try {
     const runtime = await import("./update-repair-agent.runtime.js");
@@ -194,20 +196,22 @@ export async function runUpdateRepairLoop(params: UpdateRepairParams): Promise<U
       const turnSignal = AbortSignal.any([signal, turnController.signal]);
       let outcome;
       try {
-        outcome = await runtime.withUpdateRepairEnvironment(params.target, () =>
-          runtime.runUpdateRepairTurn({
-            target: params.target,
-            route,
-            modelFallbacks,
-            prompt: repairPrompt(params, finalValidation),
-            timeoutMs,
-            maxToolCalls: remainingToolCalls,
-            signal: turnSignal,
-            isCurrent: () => {
-              assertCurrent();
-              return true;
-            },
-          }),
+        outcome = await cleanup.run(() =>
+          runtime.withUpdateRepairEnvironment(params.target, () =>
+            runtime.runUpdateRepairTurn({
+              target: params.target,
+              route,
+              modelFallbacks,
+              prompt: repairPrompt(params, finalValidation),
+              timeoutMs,
+              maxToolCalls: remainingToolCalls,
+              signal: turnSignal,
+              isCurrent: () => {
+                assertCurrent();
+                return true;
+              },
+            }),
+          ),
         );
       } finally {
         clearTimeout(turnTimer);
@@ -238,6 +242,11 @@ export async function runUpdateRepairLoop(params: UpdateRepairParams): Promise<U
       // runner has drained; never infer repair from its self-reported result.
       try {
         assertCurrent();
+        if (cleanup.outcome === "uncertain") {
+          throw new Error(
+            "Repair cleanup is unconfirmed; further repair is blocked in this process.",
+          );
+        }
         finalValidation = await validateRepair(params, signal);
         attempt.validation = finalValidation;
         params.onEvent?.({ type: "validation", turn, validation: finalValidation });
@@ -285,7 +294,8 @@ export async function runUpdateRepairLoop(params: UpdateRepairParams): Promise<U
     );
   } finally {
     clearTimeout(timer);
-    repairActive = false;
+    // Failed cleanup retains the process-local owner; Doctor cannot prove resource closure.
+    repairActive = cleanup.outcome === "uncertain";
   }
 }
 
