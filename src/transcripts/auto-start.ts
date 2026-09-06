@@ -398,6 +398,10 @@ export function createTranscriptsAutoStartService(
             capture = undefined;
           }
         }
+        // A cancelled attempt settles only after its capture cleanup owner releases.
+        if (!capture) {
+          diagnostics?.record(index, diagnosticToken);
+        }
       })().finally(() => {
         stopping = undefined;
         pendingStops.delete(task);
@@ -421,6 +425,7 @@ export function createTranscriptsAutoStartService(
             throw new Error("provider is not available");
           }
           if (!provider.watchOccupancy) {
+            diagnostics?.record(index, diagnosticToken, "start-failed");
             ctx.logger.warn(
               `${label} cannot report occupancy; remove whenOccupied or select a provider that supports occupancy watching.`,
             );
@@ -440,6 +445,7 @@ export function createTranscriptsAutoStartService(
             const key = JSON.stringify([provider.id, source.accountId, source.guildId]);
             const owner = guildOwners.get(key);
             if (owner !== undefined && owner !== index) {
+              diagnostics?.record(index, diagnosticToken, "start-failed");
               ctx.logger.warn(
                 `${label} skipped: autoStart[${owner}] already owns this provider account and guild; configure only one whenOccupied entry per account and guild.`,
               );
@@ -481,6 +487,8 @@ export function createTranscriptsAutoStartService(
           }
           watchers.add(result.value);
           ready = true;
+          // An empty room still settles the watch retry before its next capture attempt.
+          diagnostics?.record(index, diagnosticToken);
           // Initial occupancy can be reported inline by watchOccupancy. Admit
           // capture only after subscription succeeds, not after a failed watch.
           begin(1);
