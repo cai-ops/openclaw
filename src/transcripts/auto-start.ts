@@ -223,9 +223,11 @@ export function createTranscriptsAutoStartService(
     attempt: number,
     store: TranscriptsStore,
   ) => {
-    if (stopped || startedSessions.has(entry.sessionId ?? "")) {
+    if (stopped) {
       return;
     }
+    // Each configured entry must reach admission, where an already-owned ID
+    // records a terminal conflict instead of leaving a sibling's retry pending.
     const capture: OwnedCapture = {
       sessionId:
         retries.get(index)?.session.sessionId ?? entry.sessionId ?? createTranscriptSessionId(),

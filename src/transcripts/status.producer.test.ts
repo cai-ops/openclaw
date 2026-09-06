@@ -674,41 +674,98 @@ describe("configured transcript source provenance", () => {
     },
   );
 
-  it("retries unavailable providers only before admission and distinguishes duplicate configured entries", async () => {
-    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-    const entry = { ...room, sessionId: "daily" };
-    const f = fixture({ transcripts: { autoStart: [entry, entry] } });
-    vi.mocked(providerRegistry.getTranscriptSourceProvider).mockReturnValue(undefined);
-    const start = vi.fn(f.provider.start!);
-    f.provider.start = start;
-    const service = createTranscriptsAutoStartService(f.ctx);
-    try {
-      service.start();
-      await vi.waitFor(async () =>
-        expect((await f.read()).configuredSources.map((s) => s.startDiagnostic)).toEqual([
-          "retrying",
-          "retrying",
-        ]),
-      );
-      expect(await f.store.listSessionEntries()).toHaveLength(0);
-      vi.mocked(providerRegistry.getTranscriptSourceProvider).mockReturnValue(f.provider);
-      await vi.advanceTimersByTimeAsync(5_000);
-      await vi.waitFor(async () =>
-        expect((await f.read()).configuredSources.map((s) => s.state)).toEqual([
-          "armed",
-          "not-active",
-        ]),
-      );
-      const result = await f.read();
-      expect(result.configuredSources[1]?.startDiagnostic).toBe("id-conflict");
-      expect(start).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(65_000);
-      expect(start).toHaveBeenCalledTimes(1);
-      expect(await f.store.listSessionEntries()).toHaveLength(1);
-    } finally {
-      await service.stop();
-    }
-  });
+  it.each([false, true])(
+    "retries unavailable providers only before admission and distinguishes duplicate configured entries (first settled=%s)",
+    async (firstSettled) => {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const firstStarted = createDeferred();
+      const schedule = globalThis.setTimeout;
+      let retryTimers = 0;
+      const timers = vi
+        .spyOn(globalThis, "setTimeout")
+        .mockImplementation((callback, delay, ...args) =>
+          schedule(
+            firstSettled && delay === 5_000 && ++retryTimers === 2
+              ? () => {
+                  void firstStarted.promise.then(() => callback(...args));
+                }
+              : callback,
+            delay,
+            ...args,
+          ),
+        );
+      const entry = { ...room, sessionId: "daily" };
+      const f = fixture({ transcripts: { autoStart: [entry, entry] } });
+      vi.mocked(providerRegistry.getTranscriptSourceProvider).mockReturnValue(undefined);
+      const start = vi.fn(f.provider.start!);
+      f.provider.start = start;
+      const service = createTranscriptsAutoStartService(f.ctx);
+      try {
+        service.start();
+        await vi.waitFor(async () =>
+          expect((await f.read()).configuredSources.map((s) => s.startDiagnostic)).toEqual([
+            "retrying",
+            "retrying",
+          ]),
+        );
+        expect(await f.store.listSessionEntries()).toHaveLength(0);
+        timers.mockRestore();
+        vi.mocked(providerRegistry.getTranscriptSourceProvider).mockReturnValue(f.provider);
+        await vi.advanceTimersByTimeAsync(5_000);
+        if (firstSettled) {
+          expect(retryTimers).toBe(2);
+          await vi.waitFor(async () =>
+            expect((await f.read()).configuredSources[0]?.state).toBe("armed"),
+          );
+          firstStarted.resolve();
+        }
+        await vi.waitFor(async () =>
+          expect((await f.read()).configuredSources.map((s) => s.state)).toEqual([
+            "armed",
+            "not-active",
+          ]),
+        );
+        const result = await f.read();
+        expect(result.configuredSources[1]?.startDiagnostic).toBe("id-conflict");
+        expect(start).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(65_000);
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(await f.store.listSessionEntries()).toHaveLength(1);
+      } finally {
+        firstStarted.resolve();
+        await service.stop();
+      }
+    },
+  );
+
+  it.each([undefined, "inline-ended"])(
+    "does not retry a continuous capture ended during startup (sessionId=%s)",
+    async (sessionId) => {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const f = fixture({ transcripts: { autoStart: [{ ...room, sessionId }] } });
+      const start = vi.fn(async (request: TranscriptStartRequest) => {
+        await request.onStatus?.({ active: false });
+        return { ok: true as const, session: request.session };
+      });
+      f.provider.start = start;
+      const service = createTranscriptsAutoStartService(f.ctx);
+      try {
+        service.start();
+        await vi.waitFor(async () =>
+          expect((await f.read()).configuredSources[0]?.startDiagnostic).toBe("ended"),
+        );
+        await vi.advanceTimersByTimeAsync(65_000);
+        expect(start).toHaveBeenCalledOnce();
+        expect((await f.read()).active).toEqual([]);
+        expect(await f.store.listSessionEntries()).toHaveLength(1);
+        expect(await f.store.readSession(start.mock.calls[0]![0].session.sessionId)).toMatchObject({
+          stoppedAt: expect.any(String),
+        });
+      } finally {
+        await service.stop();
+      }
+    },
+  );
 
   it("fences late diagnostics and teardown against a replacement service and a manual capture", async () => {
     const f = fixture({ transcripts: { autoStart: [{ ...room, sessionId: "pending" }] } });
