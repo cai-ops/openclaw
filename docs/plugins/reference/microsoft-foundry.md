@@ -2,10 +2,13 @@
 summary: "Adds Microsoft Foundry model provider support to OpenClaw."
 read_when:
   - You are installing, configuring, or auditing the microsoft-foundry plugin
-title: "Microsoft Foundry plugin"
+title: "Microsoft Foundry plugin reference"
 ---
 
-# Microsoft Foundry plugin
+<!-- Generated file. Do not edit by hand.
+Run `pnpm plugins:inventory:gen` to rebuild it. Hand-written text survives only
+between the openclaw-plugin-reference:manual-start and
+openclaw-plugin-reference:manual-end comment markers. -->
 
 Adds Microsoft Foundry model provider support to OpenClaw.
 
@@ -16,11 +19,10 @@ Adds Microsoft Foundry model provider support to OpenClaw.
 
 ## Surface
 
-providers: `microsoft-foundry`; contracts: `imageGenerationProviders`
+- Providers: `microsoft-foundry`
+- Contracts: `imageGenerationProviders`
 
 <!-- openclaw-plugin-reference:manual-start -->
-
-- Image-generation provider: `microsoft-foundry`
 
 ## Requirements
 
@@ -33,9 +35,26 @@ providers: `microsoft-foundry`; contracts: `imageGenerationProviders`
 ## Chat models
 
 Microsoft Foundry chat deployments use the provider model ref
-`microsoft-foundry/<deployment-name>`. Onboarding discovers Foundry resources
-and deployments with the Azure CLI, then writes the selected deployment name to
-the model config.
+`microsoft-foundry/<deployment-name>`. Run onboarding to discover Foundry
+resources and deployments with the Azure CLI. Onboarding then writes the
+selected deployment name to the model config.
+
+```bash
+openclaw onboard --auth-choice microsoft-foundry-entra
+```
+
+Use `--auth-choice microsoft-foundry-apikey` for API-key auth instead. To set
+the chat model by hand, name the deployment in the agent model config:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: { primary: "microsoft-foundry/<deployment-name>" },
+    },
+  },
+}
+```
 
 OpenClaw uses the Foundry `/openai/v1` endpoint for supported OpenAI-compatible
 chat APIs:
@@ -50,8 +69,8 @@ chat APIs:
 
 Anthropic Claude deployments in Microsoft Foundry use the Anthropic Messages
 API shape, not the OpenAI-compatible `/openai/v1` shape. Configure those as a
-custom `anthropic-messages` provider until the Microsoft Foundry plugin grows a
-native Anthropic runtime. When the Foundry deployment name differs from the
+custom `anthropic-messages` provider, as shown in
+[Model providers](/concepts/model-providers). When the Foundry deployment name differs from the
 Claude model ID, set `params.canonicalModelId` on the model entry so OpenClaw
 can apply model-specific wire contracts, map `/think off` correctly, and
 preserve signed thinking safely.
@@ -98,7 +117,7 @@ that the deployment is backed by `MAI-Image-2.5-Flash` or `MAI-Image-2.5`.
 MAI image constraints:
 
 - Output: one PNG image per request.
-- Size: default `1024x1024`; both width and height must be at least 768 px.
+- Size: default `1024x1024`. Both width and height must be at least 768 px.
 - Total pixels: width × height must be at most 1,048,576.
 - Edits: one PNG or JPEG input image.
 - Unsupported shared hints such as `aspectRatio`, `resolution`, `quality`,
@@ -111,5 +130,10 @@ MAI image constraints:
   Foundry deployment through onboarding or add `models.providers.microsoft-foundry.baseUrl`.
 - `supports MAI image deployments only`: the selected image model points at a
   non-MAI deployment. Use a deployed MAI image model for `image_generate`.
+
+## Related docs
+
+- [Image generation](/tools/image-generation)
+- [Model providers](/concepts/model-providers)
 
 <!-- openclaw-plugin-reference:manual-end -->

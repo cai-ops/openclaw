@@ -2,21 +2,25 @@
 summary: "Adds OpenCode model provider support to OpenClaw."
 read_when:
   - You are installing, configuring, or auditing the opencode plugin
-title: "OpenCode plugin"
+title: "OpenCode plugin reference"
 ---
 
-# OpenCode plugin
+<!-- Generated file. Do not edit by hand.
+Run `pnpm plugins:inventory:gen` to rebuild it. Hand-written text survives only
+between the openclaw-plugin-reference:manual-start and
+openclaw-plugin-reference:manual-end comment markers. -->
 
 Adds OpenCode model provider support to OpenClaw.
 
 ## Distribution
 
 - Package: `@openclaw/opencode-provider`
-- Install route: npm; ClawHub: `clawhub:@openclaw/opencode-provider`
+- Install route: npm or ClawHub: `clawhub:@openclaw/opencode-provider`
 
 ## Surface
 
-providers: `opencode`; contracts: `mediaUnderstandingProviders`
+- Providers: `opencode`
+- Contracts: `mediaUnderstandingProviders`
 
 <!-- openclaw-plugin-reference:manual-start -->
 
@@ -24,7 +28,7 @@ providers: `opencode`; contracts: `mediaUnderstandingProviders`
 
 OpenClaw auto-detects the `opencode` CLI on the Gateway and paired nodes. Stored
 sessions then appear in the **OpenCode** sessions-sidebar group, with transcript
-browsing through the official `opencode --pure db ... --format json` and
+browsing through the official `opencode --pure db <query> --format json` and
 `opencode --pure export` commands. Local rows also offer **Continue**, which
 creates an OpenClaw session whose first turn resumes the native OpenCode session
 through ACP. OpenCode retains the full server-side model context, and the catalog
@@ -36,8 +40,17 @@ rows remain view-only.
 The restricted environment and `--pure` mode prevent catalog browsing from
 loading project plugins or inheriting unrelated Gateway credentials.
 
-Turn **OpenCode Session Catalog** off under **Config > Plugins > OpenCode** to
-disable discovery. It is enabled by default.
+## Reopen an OpenCode session in its terminal
+
+A node that also has the `opencode` CLI advertises `opencode.terminal.resume.v1`.
+The row menu and the viewer header use that command. It reopens the selected
+session in the owning terminal with `opencode --session <id>`.
+
+## Turn the catalog off
+
+OpenClaw enables the catalog by default. Turn **OpenCode Session Catalog** off
+under **Config > Plugins > OpenCode** to disable discovery. Headless operators
+set `plugins.entries.opencode.config.sessionCatalog.enabled: false` instead.
 
 <!-- openclaw-plugin-reference:manual-end -->
 

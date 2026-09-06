@@ -2,10 +2,13 @@
 summary: "Cloud worker provider backed by the Crabbox CLI."
 read_when:
   - You are installing, configuring, or auditing the crabbox plugin
-title: "Crabbox plugin"
+title: "Crabbox plugin reference"
 ---
 
-# Crabbox plugin
+<!-- Generated file. Do not edit by hand.
+Run `pnpm plugins:inventory:gen` to rebuild it. Hand-written text survives only
+between the openclaw-plugin-reference:manual-start and
+openclaw-plugin-reference:manual-end comment markers. -->
 
 Cloud worker provider backed by the Crabbox CLI.
 
@@ -16,7 +19,8 @@ Cloud worker provider backed by the Crabbox CLI.
 
 ## Surface
 
-CLI commands: `openclaw crabbox`; contracts: `workerProviders`
+- CLI commands: `openclaw crabbox`
+- Contracts: `workerProviders`
 
 <!-- openclaw-plugin-reference:manual-start -->
 
@@ -24,15 +28,28 @@ CLI commands: `openclaw crabbox`; contracts: `workerProviders`
 
 See [Cloud worker environments](/gateway/configuration-reference#crabbox-profile) for the profile schema and lifecycle notes.
 
-Forward Gateway environment variables to an operator-provided setup script by listing their names in the Crabbox profile settings:
+Forward Gateway environment variables to an operator-provided setup script by listing their names under `cloudWorkers.profiles.<name>.settings`:
 
-```json5 validate=false
+```json5
 {
-  setup: 'install-worker "$OPENCLAW_WORKER_ARTIFACT_TOKEN"',
-  setupEnv: ["OPENCLAW_WORKER_ARTIFACT_TOKEN"],
+  cloudWorkers: {
+    profiles: {
+      production: {
+        provider: "crabbox",
+        settings: {
+          provider: "aws",
+          class: "standard",
+          setup: 'install-worker "$OPENCLAW_WORKER_ARTIFACT_TOKEN"',
+          setupEnv: ["OPENCLAW_WORKER_ARTIFACT_TOKEN"],
+        },
+      },
+    },
+  },
 }
 ```
 
-`setupEnv` explicitly forwards up to 16 unique environment variable names to the setup command only. Values are read from the Gateway process environment and are never stored in the profile configuration. Missing variables fail before a machine is allocated.
+`setupEnv` explicitly forwards up to 16 unique environment variable names to the setup command only. OpenClaw reads the values from the Gateway process environment and never stores them in the profile configuration. Missing variables fail before OpenClaw allocates a machine.
+
+A nonempty `setupEnv` also turns off warm images by default. Forwarded values reach setup, so anything setup derives from them could persist in a shared image. Set `settings.warmImage: true` to capture an image anyway, after you check that setup leaves no credential on disk. See [Warm images](/gateway/cloud-workers#warm-images) for the capture boundaries.
 
 <!-- openclaw-plugin-reference:manual-end -->
